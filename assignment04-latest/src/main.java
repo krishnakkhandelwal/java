@@ -26,26 +26,49 @@ class NegativeAmountException extends Exception {
     }
 }
 
+class CustomerNotFoundException extends Exception {
+    public CustomerNotFoundException(String msg) {
+        super(msg);
+    }
+}
+
 class BankSystem {
-    int cid;
-    String cname;
-    double amount;
 
     Scanner sc = new Scanner(System.in);
 
+    // Create Account
     void createAccount() {
         try {
             System.out.print("Enter Customer ID (1-20): ");
-            cid = sc.nextInt();
+            int cid = sc.nextInt();
 
             if (cid < 1 || cid > 20)
                 throw new InvalidCIDException("CID must be between 1 and 20");
 
+            // Check duplicate CID
+            File file = new File("bank.txt");
+            if (file.exists()) {
+                Scanner fileReader = new Scanner(file);
+
+                while (fileReader.hasNext()) {
+                    int existingCid = fileReader.nextInt();
+                    fileReader.next(); // skip name
+                    fileReader.nextDouble(); // skip amount
+
+                    if (existingCid == cid) {
+                        fileReader.close();
+                        throw new InvalidCIDException("CID already exists!");
+                    }
+                }
+                fileReader.close();
+            }
+
             System.out.print("Enter Name: ");
-            cname = sc.next();
+            sc.nextLine(); // clear buffer
+            String cname = sc.nextLine();
 
             System.out.print("Enter Initial Amount: ");
-            amount = sc.nextDouble();
+            double amount = sc.nextDouble();
 
             if (amount < 0)
                 throw new NegativeAmountException("Amount must be positive");
@@ -53,7 +76,6 @@ class BankSystem {
             if (amount < 1000)
                 throw new MinimumBalanceException("Minimum balance is Rs.1000");
 
-            // Writing to file
             FileWriter fw = new FileWriter("bank.txt", true);
             fw.write(cid + " " + cname + " " + amount + "\n");
             fw.close();
@@ -65,19 +87,55 @@ class BankSystem {
         }
     }
 
+    // Withdraw using CID
     void withdraw() {
         try {
+            System.out.print("Enter Customer ID: ");
+            int searchCid = sc.nextInt();
+
             System.out.print("Enter withdrawal amount: ");
             double wth = sc.nextDouble();
 
             if (wth < 0)
                 throw new NegativeAmountException("Amount must be positive");
 
-            if (wth > amount)
-                throw new InsufficientBalanceException("Insufficient Balance!");
+            File file = new File("bank.txt");
+            File tempFile = new File("temp.txt");
 
-            amount -= wth;
-            System.out.println("Withdrawal Successful! Remaining Balance: " + amount);
+            Scanner fileReader = new Scanner(file);
+            FileWriter fw = new FileWriter(tempFile);
+
+            boolean found = false;
+
+            while (fileReader.hasNext()) {
+                int cid = fileReader.nextInt();
+                String cname = fileReader.next();
+                double amount = fileReader.nextDouble();
+
+                if (cid == searchCid) {
+                    found = true;
+
+                    if (wth > amount)
+                        throw new InsufficientBalanceException("Insufficient Balance!");
+
+                    amount -= wth;
+                    System.out.println("Withdrawal Successful! New Balance: " + amount);
+                }
+
+                fw.write(cid + " " + cname + " " + amount + "\n");
+            }
+
+            fileReader.close();
+            fw.close();
+
+            if (!found) {
+                tempFile.delete();
+                throw new CustomerNotFoundException("Customer ID does not exist!");
+            }
+
+            // Replace old file
+            file.delete();
+            tempFile.renameTo(file);
 
         } catch (Exception e) {
             System.out.println("Error: " + e.getMessage());
